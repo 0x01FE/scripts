@@ -1,0 +1,69 @@
+#!/usr/local/bin/python3.11
+
+import subprocess
+import argparse
+import warnings
+
+from colorama import init as colorama_init
+from colorama import Fore
+from colorama import Style
+
+colorama_init()
+
+warnings.filterwarnings("ignore")
+parser = argparse.ArgumentParser(prog="kgpl",
+                                 description="Gets pod logs with grep and KubeCTL",
+                                 epilog="Made by J.D.H.")
+
+parser.add_argument('podname')
+parser.add_argument('-n', '--namespace')
+parser.add_argument('-F', '--file', action="store_true")
+
+def main() -> None:
+
+    args = parser.parse_args()
+
+    pod_name: str = args.podname
+    namespace: str | None = args.namespace
+
+    result: list[str] = get_pods(pod_name, namespace).split('\n')
+
+    if result:
+        pods = []
+        for pod in result:
+            if pod:
+                pods.append(pod.split()[0])
+    else:
+        print(f"No pods found with name {pod_name}")
+        exit(1)
+
+    pod = pods[0]
+
+    result: str = get_logs(pod, namespace)
+
+    print(result)
+    print(f'{Fore.GREEN}Pods found{Style.RESET_ALL}:')
+    for pod in pods:
+        print(f' - {Fore.LIGHTBLUE_EX}{pod}{Style.RESET_ALL}')
+
+    if args.file:
+        with open(f'{pod}.log', 'w+') as file:
+            file.write(result)
+            print(f'{Fore.MAGENTA}Logs written to {pod}.log{Style.RESET_ALL}')
+
+
+def get_pods(pod_name: str, namespace: str | None = None) -> str:
+
+    result: subprocess.CompletedProcess[bytes] = subprocess.run(f'kubectl get pods{"--namespace " + namespace if namespace else ""} | grep {pod_name}', stdout=subprocess.PIPE, shell=True)
+
+    return result.stdout.decode()
+
+def get_logs(pod_name: str, namespace: str | None = None) -> str:
+
+    result: subprocess.CompletedProcess[bytes] = subprocess.run(f'kubectl logs {pod_name}{" --namespace " + namespace if namespace else ""}', shell=True, stdout=subprocess.PIPE)
+
+    return result.stdout.decode()
+
+if __name__ == "__main__":
+    main()
+
