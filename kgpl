@@ -37,7 +37,11 @@ def main() -> None:
         print(f"No pods found with name {pod_name}")
         exit(1)
 
-    pod = pods[0]
+    if pods:
+        pod = pods[0]
+    else:
+        print(f'{Fore.RED}ERROR{Style.RESET_ALL}: No pods found with name {Fore.BLUE}{pod_name}{Style.RESET_ALL}')
+        exit(1)
 
     result: str = get_logs(pod, namespace)
 
