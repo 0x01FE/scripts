@@ -1,0 +1,113 @@
+#!/usr/local/bin/python3
+
+import subprocess
+
+from rich.console import Console
+from rich.table import Table
+
+console = Console()
+
+context_commands = """
+    [dark_sea_green4]rename[/dark_sea_green4]
+    [dark_sea_green4]sdn[/dark_sea_green4] (set default namespace)
+"""
+
+
+class Context:
+    name: str
+    cluster: str
+    authinfo: str
+    namespace: str | None
+
+    def __init__(self, info: str):
+        info = info.split()
+
+        if info[0] == "*":
+            info = info[1:]
+
+        self.name = info[0]
+        self.cluster = info[1]
+        self.authinfo = info[2]
+
+        if len(info) == 4:
+            self.namespace = info[3]
+        else:
+            self.namespace = None
+
+    def rename(self, new_name: str) -> None:
+        subprocess.run(f'kubectl config rename-context {self.name} {new_name}', shell=True)
+        self.name = new_name
+
+    def set_default_namespace(self, namespace: str) -> None:
+        subprocess.run(f'kubectl config set-context {self.name} --namespace={namespace}', shell=True)
+        self.namespace = namespace
+
+def get_contexts() -> list[Context] | None:
+    result: subprocess.CompletedProcess[bytes] = subprocess.run(f'kubectl config get-contexts', stdout=subprocess.PIPE, shell=True)
+
+    result: list[str] = result.stdout.decode().split('\n')
+
+    if result:
+        contexts: list[Context] = []
+        for context in result[1:]:
+            if context:
+                contexts.append(Context(context))
+    else:
+        console.print("[red1 reverse b]ERROR[/red1 reverse b]: No kubectl contexts found.")
+
+    return contexts if contexts else None
+
+def contexts_selection_menu(contexts: list[Context]) -> Table:
+    table = Table(title="Contexts")
+
+    table.add_column("Index")
+    table.add_column("Name")
+    table.add_column("Cluster")
+    table.add_column("Auth Info")
+    table.add_column("Namespace")
+
+    for i, context in enumerate(contexts):
+        table.add_row(str(i),
+                      context.name,
+                      context.cluster,
+                      context.authinfo,
+                      context.namespace)
+
+    return table
+
+def main() -> None:
+    contexts = get_contexts()
+
+    menu: Table = contexts_selection_menu(contexts)
+
+    console.print(menu)
+    console.print("Select -1 to [red1]exit[/red1].")
+    context_index: int = int(console.input("Enter the [u]index[/u] of the context you would like to edit: "))
+
+    if context_index == -1:
+        exit()
+
+    selected_context: Context = contexts[context_index]
+
+    console.print(context_commands)
+    command: str = console.input("Select a command: ")
+
+    match command.lower():
+        case "rename":
+            new_name = console.input(f'Please enter a new name for context "{selected_context.name}": ')
+            selected_context.rename(new_name)
+            console.print(f'Context "{selected_context.name}" renamed.')
+        case "sdn":
+            new_namespace = console.input(f'Please enter a default namespace for context "{selected_context.name}": ')
+            selected_context.set_default_namespace(new_namespace)
+            console.print(f'"{new_namespace}" set as default namespace for context "{selected_context.name}"')
+
+    console.clear()
+
+    main()
+
+
+if __name__ == "__main__":
+    main()
+
+
