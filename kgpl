@@ -3,10 +3,19 @@
 import subprocess
 import argparse
 
+from rich.theme import Theme
 from rich.console import Console
 from rich.table import Table
 
-console = Console()
+theme = Theme({
+    "danger" : "bold red1",
+    "error" : "bold red1 reverse",
+    "stable" : "green1",
+    "done" : "green",
+    "info" : "cyan"
+})
+
+console = Console(theme=theme)
 
 class Pod:
     name: str
@@ -29,17 +38,19 @@ class Pod:
         return f'[deep_sky_blue1]{self.name[:name_i]}[u reverse]{self.name[name_i:name_end_i]}[/u reverse]{self.name[name_end_i:]}[/deep_sky_blue1]'
 
     def get_status(self) -> str:
-        c = f'[bold red1]{self.status}[/bold red1]'
+        c = f'[danger]{self.status}[/danger]'
 
         match self.status:
             case "Running":
-                c = f'[green1]{self.status}[/green1]'
+                c = f'[stable]{self.status}[/stable]'
             case "Starting":
-                c = f'[cyan]{self.status}[/cyan]'
+                c = f'[info]{self.status}[/info]'
             case "Completed":
-                c = f'[green]{self.status}[/green]'
+                c = f'[done]{self.status}[/done]'
             case "Error":
-                c = f'[red1 reverse b]{self.status}[/red1 reverse b]'
+                c = f'[error]{self.status}[/error]'
+            case "ContainerCreating":
+                c = f'[info]{self.status}[/info]'
 
         return c
 
@@ -48,15 +59,22 @@ class Pod:
 
         return result.stdout.decode()
 
+    def describe(self, namespace: str | None = None) -> str:
+        result: subprocess.CompletedProcess[bytes] = subprocess.run(f'kubectl describe pod {self.name}{" --namespace" + namespace if namespace else ""}', shell=True, stdout=subprocess.PIPE)
+
+        return result.stdout.decode()
+
 
 parser = argparse.ArgumentParser(prog="kgpl",
                                  description="Kubectl Get Pod Logs (KGPL)",
                                  epilog="Made by J.D.H.")
 
-parser.add_argument('podname')
+parser.add_argument('podname', help="regex to find the pod with")
 parser.add_argument('-n', '--namespace', help="Namespace where the pod is located")
-parser.add_argument('-F', '--file', action="store_true", help="Stores pod logs in a file in the current directory with the name (Pod-Name.log)")
+parser.add_argument('-F', '--file', action="store_true", help="Stores output in a file in the current directory with the name (Pod-Name.log)")
 parser.add_argument('-i', '--index', help="Index of the pod (Default=0)", default=0)
+parser.add_argument('-d', '--describe', action="store_true", help="Describes the pod instead of getting logs")
+parser.add_argument('-o', '--info-only', help='only prints pod info', action="store_true")
 
 def main() -> None:
 
@@ -65,18 +83,24 @@ def main() -> None:
     pod_name: str = args.podname
     namespace: str | None = args.namespace
     pod_index: int = int(args.index) if args.index else 0
+    describe: bool = args.describe
+    info_only: bool = args.info_only
 
     pods: list[Pod] = get_pods(pod_name, namespace)
 
     if pods:
         pod = pods[pod_index]
     else:
-        console.print(f'[bold red1]ERROR[/bold red1]: No pods found with name [deep_sky_blue1]{pod_name}[/deep_sky_blue1]')
+        console.print(f'[error]ERROR[/error]: No pods found with name [deep_sky_blue1]{pod_name}[/deep_sky_blue1]')
         exit(1)
 
-    logs: str = pod.get_logs(namespace)
+    if describe:
+        logs: str = pod.describe(namespace)
+    else:
+        logs: str = pod.get_logs(namespace)
 
-    print(logs)
+    if not info_only:
+        print(logs)
 
     # Table Setup
     table = Table(title="[b spring_green1 not i]Pods[/b spring_green1 not i]")
