@@ -4,12 +4,13 @@ import subprocess
 import argparse
 
 from rich.console import Console
+from rich.table import Table
 
 console = Console()
 
 class Pod:
     name: str
-    amount: str
+    ready: str
     status: str
     restarts: int
     age: str
@@ -17,22 +18,30 @@ class Pod:
     def __init__(self, pod_info: str):
         pod_info = pod_info.split()
         self.name = pod_info[0]
-        self.amount = pod_info[1]
+        self.ready = pod_info[1]
         self.status = pod_info[2]
         self.restarts = pod_info[3]
         self.age = pod_info[-1]
 
-    def __str__(self) -> str:
-        s = f'[deep_sky_blue1]{self.name}[/deep_sky_blue1]  {self.amount}  '
+    def highlight_name(self, pod_name: str) -> str:
+        name_i: int = self.name.find(pod_name)
+        name_end_i: int = name_i + len(pod_name)
+        return f'[deep_sky_blue1]{self.name[:name_i]}[u reverse]{self.name[name_i:name_end_i]}[/u reverse]{self.name[name_end_i:]}[/deep_sky_blue1]'
+
+    def get_status(self) -> str:
         c = f'[bold red1]{self.status}[/bold red1]'
-        if self.status == "Running":
-            c = f'[underline green1]{self.status}[/underline green1]'
-        elif self.status == "Starting":
-            c = f'[cyan]{self.status}[/cyan]'
 
-        s += f'{c}  {self.restarts}  {self.age}'
+        match self.status:
+            case "Running":
+                c = f'[green1]{self.status}[/green1]'
+            case "Starting":
+                c = f'[cyan]{self.status}[/cyan]'
+            case "Completed":
+                c = f'[green]{self.status}[/green]'
+            case "Error":
+                c = f'[red1 reverse b]{self.status}[/red1 reverse b]'
 
-        return s
+        return c
 
     def get_logs(self, namespace: str | None = None) -> str:
         result: subprocess.CompletedProcess[bytes] = subprocess.run(f'kubectl logs {self.name}{" --namespace " + namespace if namespace else ""}', shell=True, stdout=subprocess.PIPE)
@@ -68,10 +77,29 @@ def main() -> None:
     logs: str = pod.get_logs(namespace)
 
     print(logs)
-    console.print(f'[green]Pods found[/green]:')
-    print(f"SELECTED INDEX NAME{(len(pods[0].name) - 3) * ' '}STATUS     RESTARTS AGE")
+
+    # Table Setup
+    table = Table(title="[b spring_green1 not i]Pods[/b spring_green1 not i]")
+    table.add_column("Selected")
+    table.add_column("Index")
+    table.add_column("Name")
+    table.add_column("Status")
+    table.add_column("Ready")
+    table.add_column("Restarts")
+    table.add_column("Age")
+
+
     for i, pod in enumerate(pods):
-        console.print(f'{"[b]*[/b]" + " " * 8 if i == pod_index else " " * 9}[{i}]  {pod}')
+
+        table.add_row("[b]*[/b]" if i == pod_index else " ",
+                      str(i),
+                      pod.highlight_name(pod_name),
+                      pod.get_status(),
+                      pod.ready,
+                      pod.restarts,
+                      pod.age)
+
+    console.print(table)
 
     if args.file:
         with open(f'{pod.name}.log', 'w+') as file:
