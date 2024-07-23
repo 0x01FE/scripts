@@ -3,9 +3,9 @@
 import subprocess
 import argparse
 
-from colorama import init as colorama_init
-from colorama import Fore
-from colorama import Style
+from rich.console import Console
+
+console = Console()
 
 class Pod:
     name: str
@@ -23,14 +23,14 @@ class Pod:
         self.age = pod_info[-1]
 
     def __str__(self) -> str:
-        s = f'{Fore.LIGHTBLUE_EX}{self.name}{Style.RESET_ALL}  {self.amount}  '
-        c = Fore.WHITE
+        s = f'[deep_sky_blue1]{self.name}[/deep_sky_blue1]  {self.amount}  '
+        c = f'[bold red1]{self.status}[/bold red1]'
         if self.status == "Running":
-            c = Fore.LIGHTGREEN_EX
+            c = f'[underline green1]{self.status}[/underline green1]'
         elif self.status == "Starting":
-            c = Fore.CYAN
+            c = f'[cyan]{self.status}[/cyan]'
 
-        s += f'{c}{self.status}{Style.RESET_ALL}  {self.restarts}  {self.age}'
+        s += f'{c}  {self.restarts}  {self.age}'
 
         return s
 
@@ -39,8 +39,6 @@ class Pod:
 
         return result.stdout.decode()
 
-
-colorama_init()
 
 parser = argparse.ArgumentParser(prog="kgpl",
                                  description="Kubectl Get Pod Logs (KGPL)",
@@ -64,21 +62,21 @@ def main() -> None:
     if pods:
         pod = pods[pod_index]
     else:
-        print(f'{Fore.RED}ERROR{Style.RESET_ALL}: No pods found with name {Fore.BLUE}{pod_name}{Style.RESET_ALL}')
+        console.print(f'[bold red1]ERROR[/bold red1]: No pods found with name [deep_sky_blue1]{pod_name}[/deep_sky_blue1]')
         exit(1)
 
     logs: str = pod.get_logs(namespace)
 
     print(logs)
-    print(f'{Fore.GREEN}Pods found{Style.RESET_ALL}:')
+    console.print(f'[green]Pods found[/green]:')
     print(f"SELECTED INDEX NAME{(len(pods[0].name) - 3) * ' '}STATUS     RESTARTS AGE")
     for i, pod in enumerate(pods):
-        print(f'{"*" + " " * 8 if i == pod_index else " " * 9}[{i}]  {pod}')
+        console.print(f'{"[b]*[/b]" + " " * 8 if i == pod_index else " " * 9}[{i}]  {pod}')
 
     if args.file:
         with open(f'{pod.name}.log', 'w+') as file:
             file.write(logs)
-            print(f'{Fore.MAGENTA}Logs written to {pod.name}.log{Style.RESET_ALL}')
+            console.print(f'[magenta]Logs written to {pod.name}.log[/magenta]')
 
 
 def get_pods(pod_name: str, namespace: str | None = None) -> list[Pod] | None:
